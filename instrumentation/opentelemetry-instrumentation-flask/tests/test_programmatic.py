@@ -40,7 +40,6 @@ from opentelemetry.util.http import (
     OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SANITIZE_FIELDS,
     OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_REQUEST,
     OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_RESPONSE,
-    OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_RESPONSE,
     OTEL_PYTHON_INSTRUMENTATION_HTTP_CAPTURE_ALL_METHODS,
     get_excluded_urls,
 )
@@ -328,7 +327,9 @@ class TestProgrammatic(InstrumentationTest, WsgiTestBase):
                         if isinstance(point, NumberDataPoint):
                             self.assertEqual(point.value, 0)
 
-    def _assert_basic_metric(self, expected_duration_attributes, expected_requests_count_attributes):
+    def _assert_basic_metric(
+        self, expected_duration_attributes, expected_requests_count_attributes
+    ):
         metrics_list = self.memory_metrics_reader.get_metrics_data()
         for resource_metric in metrics_list.resource_metrics:
             for scope_metrics in resource_metric.scope_metrics:
@@ -394,7 +395,7 @@ class TestProgrammatic(InstrumentationTest, WsgiTestBase):
         )
 
     @patch.dict(
-    "os.environ",
+        "os.environ",
         {
             OTEL_PYTHON_INSTRUMENTATION_HTTP_CAPTURE_ALL_METHODS: "1",
         },
@@ -670,6 +671,22 @@ class TestCustomRequestResponseHeaders(InstrumentationTest, WsgiTestBase):
         self.assertEqual(span.kind, trace.SpanKind.SERVER)
         self.assertSpanHasAttributes(span, expected)
 
+    def test_repeat_custom_request_header_added_in_server_span(self):
+        headers = [
+            ("Custom-Test-Header-1", "Test Value 1"),
+            ("Custom-Test-Header-1", "Test Value 2"),
+        ]
+        resp = self.client.get("/hello/123", headers=headers)
+        self.assertEqual(200, resp.status_code)
+        span = self.memory_exporter.get_finished_spans()[0]
+        expected = {
+            "http.request.header.custom_test_header_1": (
+                "Test Value 1, Test Value 2",
+            ),
+        }
+        self.assertEqual(span.kind, trace.SpanKind.SERVER)
+        self.assertSpanHasAttributes(span, expected)
+
     def test_custom_request_header_not_added_in_internal_span(self):
         tracer = trace.get_tracer(__name__)
         with tracer.start_as_current_span("test", kind=trace.SpanKind.SERVER):
@@ -719,6 +736,21 @@ class TestCustomRequestResponseHeaders(InstrumentationTest, WsgiTestBase):
                 "my-custom-regex-value-3,my-custom-regex-value-4",
             ),
             "http.response.header.my_secret_header": ("[REDACTED]",),
+        }
+        self.assertEqual(span.kind, trace.SpanKind.SERVER)
+        self.assertSpanHasAttributes(span, expected)
+
+    def test_repeat_custom_response_header_added_in_server_span(self):
+        resp = self.client.get("/test_repeat_custom_response_headers")
+        self.assertEqual(resp.status_code, 200)
+        span = self.memory_exporter.get_finished_spans()[0]
+        expected = {
+            "http.response.header.content_type": (
+                "text/plain; charset=utf-8",
+            ),
+            "http.response.header.my_custom_header": (
+                "my-custom-value-1,my-custom-header-2",
+            ),
         }
         self.assertEqual(span.kind, trace.SpanKind.SERVER)
         self.assertSpanHasAttributes(span, expected)
