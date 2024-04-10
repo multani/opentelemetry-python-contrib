@@ -16,7 +16,7 @@
 import os
 from unittest import TestCase, mock
 
-from pkg_resources import DistributionNotFound, require
+from importlib_metadata import distribution, PackageNotFoundError
 
 from opentelemetry.distro import OpenTelemetryDistro
 from opentelemetry.environment_variables import (
@@ -29,8 +29,8 @@ from opentelemetry.sdk.environment_variables import OTEL_EXPORTER_OTLP_PROTOCOL
 class TestDistribution(TestCase):
     def test_package_available(self):
         try:
-            require(["opentelemetry-distro"])
-        except DistributionNotFound:
+            distribution("opentelemetry-distro")
+        except PackageNotFoundError:
             self.fail("opentelemetry-distro not installed")
 
     @mock.patch.dict("os.environ", {}, clear=True)
