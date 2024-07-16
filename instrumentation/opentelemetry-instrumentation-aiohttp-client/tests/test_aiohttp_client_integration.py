@@ -803,5 +803,5 @@ class TestLoadingAioHttpInstrumentor(unittest.TestCase):
             group="opentelemetry_instrumentor", name="aiohttp-client"
         )
 
-        instrumentor = next(entry_points).load()()
-        self.assertIsInstance(instrumentor, AioHttpClientInstrumentor)
+        instrumentor = entry_points["aiohttp-client"].load()
+        self.assertEqual(instrumentor, AioHttpClientInstrumentor)
