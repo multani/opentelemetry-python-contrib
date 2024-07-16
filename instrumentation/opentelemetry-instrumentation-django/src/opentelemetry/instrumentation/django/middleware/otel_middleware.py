@@ -163,9 +163,9 @@ class _DjangoMiddleware(MiddlewareMixin):
     _active_request_counter = None
 
     _otel_request_hook: Callable[[Span, HttpRequest], None] = None
-    _otel_response_hook: Callable[
-        [Span, HttpRequest, HttpResponse], None
-    ] = None
+    _otel_response_hook: Callable[[Span, HttpRequest, HttpResponse], None] = (
+        None
+    )
 
     @staticmethod
     def _get_span_name(request):
@@ -187,6 +187,7 @@ class _DjangoMiddleware(MiddlewareMixin):
             return request.method
 
     # pylint: disable=too-many-locals
+    # pylint: disable=too-many-branches
     def process_request(self, request):
         # request.META is a dictionary containing all available HTTP headers
         # Read more about request.META here:
@@ -229,9 +230,9 @@ class _DjangoMiddleware(MiddlewareMixin):
         )
         duration_attrs = _parse_duration_attrs(attributes)
 
-        request.META[
-            self._environ_active_request_attr_key
-        ] = active_requests_count_attrs
+        request.META[self._environ_active_request_attr_key] = (
+            active_requests_count_attrs
+        )
         request.META[self._environ_duration_attr_key] = duration_attrs
         self._active_request_counter.add(1, active_requests_count_attrs)
         if span.is_recording():
@@ -286,9 +287,14 @@ class _DjangoMiddleware(MiddlewareMixin):
             request.META[self._environ_token] = token
 
         if _DjangoMiddleware._otel_request_hook:
-            _DjangoMiddleware._otel_request_hook(  # pylint: disable=not-callable
-                span, request
-            )
+            try:
+                _DjangoMiddleware._otel_request_hook(  # pylint: disable=not-callable
+                    span, request
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Raising an exception here would leak the request span since process_response
+                # would not be called. Log the exception instead.
+                _logger.exception("Exception raised by request_hook")
 
     # pylint: disable=unused-argument
     def process_view(self, request, view_func, *args, **kwargs):
@@ -309,6 +315,12 @@ class _DjangoMiddleware(MiddlewareMixin):
                     route = getattr(match, "route", None)
                     if route:
                         span.set_attribute(SpanAttributes.HTTP_ROUTE, route)
+                        duration_attrs = request.META[
+                            self._environ_duration_attr_key
+                        ]
+                        # Metrics currently use the 1.11.0 schema, which puts the route in `http.target`.
+                        # TODO: use `http.route` when the user sets `OTEL_SEMCONV_STABILITY_OPT_IN`.
+                        duration_attrs[SpanAttributes.HTTP_TARGET] = route
 
     def process_exception(self, request, exception):
         if self._excluded_urls.url_disabled(request.build_absolute_uri("?")):
@@ -336,9 +348,9 @@ class _DjangoMiddleware(MiddlewareMixin):
             self._environ_duration_attr_key, None
         )
         if duration_attrs:
-            duration_attrs[
-                SpanAttributes.HTTP_STATUS_CODE
-            ] = response.status_code
+            duration_attrs[SpanAttributes.HTTP_STATUS_CODE] = (
+                response.status_code
+            )
         request_start_time = request.META.pop(self._environ_timer_key, None)
 
         if activation and span:
@@ -385,10 +397,14 @@ class _DjangoMiddleware(MiddlewareMixin):
 
             # record any exceptions raised while processing the request
             exception = request.META.pop(self._environ_exception_key, None)
+
             if _DjangoMiddleware._otel_response_hook:
-                _DjangoMiddleware._otel_response_hook(  # pylint: disable=not-callable
-                    span, request, response
-                )
+                try:
+                    _DjangoMiddleware._otel_response_hook(  # pylint: disable=not-callable
+                        span, request, response
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    _logger.exception("Exception raised by response_hook")
 
             if exception:
                 activation.__exit__(
