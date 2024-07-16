@@ -34,7 +34,8 @@ class MockInstrumetor(BaseInstrumentor):
 
 class MockEntryPoint(EntryPoint):
     def __init__(self, obj):  # pylint: disable=super-init-not-called
-        self._obj = obj
+        # EntryPoint is immutable and prevents `self._obj = obj`
+        vars(self).update(_obj=obj)
 
     def load(self, *args, **kwargs):  # pylint: disable=signature-differs
         return self._obj
