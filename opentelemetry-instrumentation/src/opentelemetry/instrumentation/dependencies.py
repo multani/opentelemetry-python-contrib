@@ -1,13 +1,8 @@
 from logging import getLogger
 from typing import Collection, Optional
 
-from pkg_resources import (
-    Distribution,
-    DistributionNotFound,
-    RequirementParseError,
-    VersionConflict,
-    get_distribution,
-)
+from importlib_metadata import Distribution, PackageNotFoundError, distribution
+from packaging.requirements import Requirement
 
 logger = getLogger(__name__)
 
@@ -35,7 +30,7 @@ def get_dist_dependency_conflicts(
             #    requests ~= 1.0
             # instead of
             #    requests ~= 1.0; extra = "instruments"
-            # which does not work with `get_distribution()`
+            # which does not work with `distribution()`
             dep.marker = None
             instrumentation_deps.append(str(dep))
 
@@ -47,11 +42,7 @@ def get_dependency_conflicts(
 ) -> Optional[DependencyConflict]:
     for dep in deps:
         try:
-            get_distribution(dep)
-        except VersionConflict as exc:
-            return DependencyConflict(dep, exc.dist)
-        except DistributionNotFound:
-            return DependencyConflict(dep)
+            req = Requirement(dep)
         except RequirementParseError as exc:
             logger.warning(
                 'error parsing dependency, reporting as a conflict: "%s" - %s',
@@ -59,4 +50,13 @@ def get_dependency_conflicts(
                 exc,
             )
             return DependencyConflict(dep)
+
+        try:
+            dist = distribution(req.name)
+        except PackageNotFoundError:
+            return DependencyConflict(dep)
+
+        if not req.specifier.contains(dist.version):
+            return DependencyConflict(dep, f"{dist.name} {dist.version}")
+
     return None

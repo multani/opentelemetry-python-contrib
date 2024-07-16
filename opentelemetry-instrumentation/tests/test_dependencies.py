@@ -14,7 +14,10 @@
 
 # pylint: disable=protected-access
 
-import pkg_resources
+from unittest.mock import PropertyMock
+
+from packaging.requirements import Requirement
+from importlib_metadata import Distribution
 import pytest
 
 from opentelemetry.instrumentation.dependencies import (
@@ -54,16 +57,25 @@ class TestDependencyConflicts(TestBase):
         def mock_requires(extras=()):
             if "instruments" in extras:
                 return [
-                    pkg_resources.Requirement(
+                    Requirement(
                         'test-pkg ~= 1.0; extra == "instruments"'
                     )
                 ]
             return []
 
-        dist = pkg_resources.Distribution(
+        # Implement Distribution's abstract methods to remove warnings during testing
+        class SimpleDistribution(Distribution):
+            def read_text(self, filename):
+                return None
+
+            def locate_file(self, path):
+                raise NotImplemented()
+
+        dist = SimpleDistribution(
             project_name="test-instrumentation", version="1.0"
         )
-        dist.requires = mock_requires
+        # The `dist.requires` property is not settable.
+        type(dist).requires = PropertyMock(return_value=mock_requires)
 
         conflict = get_dist_dependency_conflicts(dist)
         self.assertTrue(conflict is not None)
