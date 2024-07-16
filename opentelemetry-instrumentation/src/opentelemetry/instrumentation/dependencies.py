@@ -1,11 +1,7 @@
 from logging import getLogger
 from typing import Collection, Optional
 
-from importlib_metadata import (
-    distribution,
-    Distribution,
-    PackageNotFoundError,
-)
+from importlib_metadata import Distribution, PackageNotFoundError, distribution
 from packaging.requirements import Requirement
 
 logger = getLogger(__name__)

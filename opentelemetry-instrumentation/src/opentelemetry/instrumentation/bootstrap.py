@@ -15,6 +15,7 @@
 import argparse
 import logging
 import sys
+from importlib.metadata import PackageNotFoundError, distribution
 from subprocess import (
     PIPE,
     CalledProcessError,
@@ -22,8 +23,8 @@ from subprocess import (
     SubprocessError,
     check_call,
 )
+
 from packaging.requirements import Requirement
-from importlib.metadata import distribution, PackageNotFoundError
 
 from opentelemetry.instrumentation.bootstrap_gen import (
     default_instrumentations,
